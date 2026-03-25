@@ -709,6 +709,9 @@ async def unfollow_user(db: Any, request: Any, env: Any, target_user_id: str) ->
             return error_response("Invalid or expired token", status=401)
         following_id = int(target_user_id)
 
+        if follower_id == following_id:
+            return error_response("Cannot unfollow yourself", status=400)
+
         result = await db.prepare(
             "DELETE FROM user_follows WHERE follower_id = ? AND following_id = ? RETURNING id"
         ).bind(follower_id, following_id).first()
