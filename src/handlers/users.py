@@ -282,6 +282,8 @@ async def handle_users(
                 return await get_user_followers(db, env, user_id, query_params)
             elif path.endswith("/following"):
                 return await get_user_following(db, env, user_id, query_params)
+            elif path.endswith("/follow"):
+                return error_response("Method Not Allowed", status=405, headers={"Allow": "POST, DELETE"})
             else:
                 # Get basic user info
                 return await get_user(db, env, user_id)
