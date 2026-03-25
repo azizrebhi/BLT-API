@@ -680,6 +680,8 @@ async def follow_user(db: Any, request: Any, env: Any, target_user_id: str) -> A
         except Exception as e:
             if "UNIQUE constraint failed" in str(e):
                 return error_response("Already following this user", status=409)
+            if "FOREIGN KEY constraint failed" in str(e):
+                return error_response("User not found", status=404)
             raise
 
         return Response.json({"success": True, "message": "User followed"}, status=201)
