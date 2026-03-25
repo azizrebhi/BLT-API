@@ -239,6 +239,9 @@ async def handle_users(
     if method not in {"GET", "POST", "DELETE"}:
         return error_response("Method Not Allowed", status=405, headers={"Allow": "GET, POST, DELETE"})
     
+    if method == "DELETE" and "id" not in path_params:
+        return error_response("Method Not Allowed", status=405, headers={"Allow": "GET, POST"})
+    
     try: 
         db = await get_db_safe(env)  
     except Exception as e:
@@ -672,8 +675,10 @@ async def follow_user(db: Any, request: Any, env: Any, target_user_id: str) -> A
             await db.prepare(
                 "INSERT INTO user_follows (follower_id, following_id) VALUES (?, ?)"
             ).bind(follower_id, following_id).run()
-        except Exception:
-            return error_response("Already following this user", status=409)
+        except Exception as e:
+            if "UNIQUE constraint failed" in str(e):
+                return error_response("Already following this user", status=409)
+            raise
 
         return Response.json({"success": True, "message": "User followed"}, status=201)
     except Exception as e:
