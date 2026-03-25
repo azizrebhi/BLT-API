@@ -645,9 +645,9 @@ async def follow_user(db: Any, request: Any, env: Any, target_user_id: str) -> A
     logger = logging.getLogger(__name__)
     try:
         auth_header = _get_header(request, "Authorization")
-        if not auth_header:
+        if not auth_header or not auth_header.startswith("Bearer "):
             return error_response("Authentication required", status=401)
-        token = auth_header.replace("Bearer ", "")
+        token = auth_header[7:]
         if not token:
             return error_response("Authentication required", status=401)
 
@@ -655,7 +655,10 @@ async def follow_user(db: Any, request: Any, env: Any, target_user_id: str) -> A
         if not payload or not payload.get("user_id"):
             return error_response("Invalid or expired token", status=401)
 
-        follower_id = int(payload["user_id"])
+        try:
+            follower_id = int(payload["user_id"])
+        except (ValueError, TypeError):
+            return error_response("Invalid or expired token", status=401)
         following_id = int(target_user_id)
 
         if follower_id == following_id:
@@ -665,20 +668,17 @@ async def follow_user(db: Any, request: Any, env: Any, target_user_id: str) -> A
         if not target:
             return error_response("User not found", status=404)
 
-        existing = await UserFollow.objects(db).filter(
-            follower_id=follower_id, following_id=following_id
-        ).first()
-        if existing:
+        try:
+            await db.prepare(
+                "INSERT INTO user_follows (follower_id, following_id) VALUES (?, ?)"
+            ).bind(follower_id, following_id).run()
+        except Exception:
             return error_response("Already following this user", status=409)
-
-        await db.prepare(
-            "INSERT INTO user_follows (follower_id, following_id) VALUES (?, ?)"
-        ).bind(follower_id, following_id).run()
 
         return Response.json({"success": True, "message": "User followed"}, status=201)
     except Exception as e:
         logger.error(f"Error following user: {str(e)}")
-        return error_response(f"Error following user: {str(e)}", status=500)
+        return error_response("Internal server error", status=500)
 
 
 async def unfollow_user(db: Any, request: Any, env: Any, target_user_id: str) -> Any:
@@ -686,9 +686,9 @@ async def unfollow_user(db: Any, request: Any, env: Any, target_user_id: str) ->
     logger = logging.getLogger(__name__)
     try:
         auth_header = _get_header(request, "Authorization")
-        if not auth_header:
+        if not auth_header or not auth_header.startswith("Bearer "):
             return error_response("Authentication required", status=401)
-        token = auth_header.replace("Bearer ", "")
+        token = auth_header[7:]
         if not token:
             return error_response("Authentication required", status=401)
 
@@ -696,7 +696,10 @@ async def unfollow_user(db: Any, request: Any, env: Any, target_user_id: str) ->
         if not payload or not payload.get("user_id"):
             return error_response("Invalid or expired token", status=401)
 
-        follower_id = int(payload["user_id"])
+        try:
+            follower_id = int(payload["user_id"])
+        except (ValueError, TypeError):
+            return error_response("Invalid or expired token", status=401)
         following_id = int(target_user_id)
 
         existing = await UserFollow.objects(db).filter(
@@ -712,4 +715,4 @@ async def unfollow_user(db: Any, request: Any, env: Any, target_user_id: str) ->
         return Response.json({"success": True, "message": "User unfollowed"})
     except Exception as e:
         logger.error(f"Error unfollowing user: {str(e)}")
-        return error_response(f"Error unfollowing user: {str(e)}", status=500)
+        return error_response("Internal server error", status=500)
