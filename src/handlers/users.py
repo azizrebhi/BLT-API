@@ -673,10 +673,14 @@ async def follow_user(db: Any, request: Any, env: Any, target_user_id: str) -> A
         if not target:
             return error_response("User not found", status=404)
 
+        existing = await UserFollow.objects(db).filter(
+            follower_id=follower_id, following_id=following_id
+        ).first()
+        if existing:
+            return error_response("Already following this user", status=409)
+
         try:
-            await db.prepare(
-                "INSERT INTO user_follows (follower_id, following_id) VALUES (?, ?)"
-            ).bind(follower_id, following_id).run()
+            await UserFollow.create(db, follower_id=follower_id, following_id=following_id)
         except Exception as e:
             if "UNIQUE constraint failed" in str(e):
                 return error_response("Already following this user", status=409)
@@ -714,12 +718,15 @@ async def unfollow_user(db: Any, request: Any, env: Any, target_user_id: str) ->
         if follower_id == following_id:
             return error_response("Cannot unfollow yourself", status=400)
 
-        result = await db.prepare(
-            "DELETE FROM user_follows WHERE follower_id = ? AND following_id = ? RETURNING id"
-        ).bind(follower_id, following_id).first()
-
-        if not result:
+        existing = await UserFollow.objects(db).filter(
+            follower_id=follower_id, following_id=following_id
+        ).first()
+        if not existing:
             return error_response("Not following this user", status=404)
+
+        await UserFollow.objects(db).filter(
+            follower_id=follower_id, following_id=following_id
+        ).delete()
 
         return Response.json({"success": True, "message": "User unfollowed"})
     except Exception as e:
